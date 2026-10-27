@@ -79,6 +79,74 @@
                     <dd class="mt-1 text-sm capitalize text-gray-900">{{ $user->role }}</dd>
                 </div>
             </dl>
+
+            @if ($puedeElegirPlaza)
+                <section class="border-t border-gray-100 p-6" aria-labelledby="profile-plaza-title">
+                    <h2 id="profile-plaza-title" class="text-base font-semibold text-gray-900">Mi plaza</h2>
+                    @if ($user->plaza)
+                        <p class="mt-2 text-sm text-gray-700">
+                            Clave actual: <strong>{{ $user->plaza->codigo }}</strong>
+                        </p>
+                        <p class="mt-2 text-sm text-gray-600">
+                            Tu plaza ya fue elegida y no puede modificarse.
+                        </p>
+                    @elseif ($user->plaza_cambio_realizado)
+                        <p class="mt-2 text-sm text-gray-600">
+                            Ya utilizaste tu única elección de plaza.
+                        </p>
+                    @else
+                        <p class="mt-2 text-sm text-gray-600">
+                            Elige una clave disponible. Las plazas ocupadas o reservadas aparecen deshabilitadas.
+                            Esta elección solo puede hacerse una vez.
+                        </p>
+                        <form action="{{ route('profile.plaza.update') }}" method="POST"
+                            class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                            @csrf
+                            @method('PUT')
+                            <div class="min-w-0 flex-1">
+                                <label for="plaza_codigo" class="mb-1 block text-sm font-semibold text-gray-700">
+                                    Clave de plaza
+                                </label>
+                                <select id="plaza_codigo" name="plaza_codigo" required
+                                    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-200">
+                                    <option value="">Selecciona una clave</option>
+                                    @foreach ($plazasDisponibles as $tipoTiempo => $plazasTiempo)
+                                        <optgroup label="{{ $tipoTiempo }}">
+                                            @foreach ($plazasTiempo as $plaza)
+                                                @php
+                                                    $plazaNoDisponible = $plaza->user_id !== null
+                                                        || $plaza->ofrecida_para_ascenso
+                                                        || $plaza->reservada_por !== null;
+                                                @endphp
+                                                <option value="{{ $plaza->codigo }}" @disabled($plazaNoDisponible)
+                                                    @selected(old('plaza_codigo') === $plaza->codigo)>
+                                                    {{ $plaza->codigo }}
+                                                    @if ($plaza->reservada_por !== null)
+                                                        — reservada
+                                                    @elseif ($plaza->ofrecida_para_ascenso)
+                                                        — ofrecida para ascenso
+                                                    @elseif ($plaza->user_id !== null)
+                                                        — ocupada
+                                                    @else
+                                                        — disponible
+                                                    @endif
+                                                </option>
+                                            @endforeach
+                                        </optgroup>
+                                    @endforeach
+                                </select>
+                                @error('plaza_codigo')
+                                    <p role="alert" class="mt-1 text-sm text-red-700">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            <button type="submit"
+                                class="rounded-lg bg-rose-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-800">
+                                Guardar plaza
+                            </button>
+                        </form>
+                    @endif
+                </section>
+            @endif
         </div>
 
         <div data-photo-modal

@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Dictaminador\ConvocatoriaController as DictaminadorConvocatoriaController;
 use App\Http\Controllers\Dictaminador\PostulanteController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PlazaController;
 use App\Http\Controllers\PostulacionController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Convocatoria;
@@ -90,10 +91,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/notificaciones/leer-todas', [NotificationController::class, 'markAllRead'])
         ->name('notifications.read-all');
     Route::get('/mi-perfil', [ProfileController::class, 'show'])->name('profile.show');
+    Route::put('/mi-perfil/plaza', [ProfileController::class, 'updateCurrentPlaza'])
+        ->name('profile.plaza.update');
     Route::get('/mi-perfil/foto', [ProfileController::class, 'photo'])->name('profile.photo');
     Route::post('/mi-perfil/foto', [ProfileController::class, 'updatePhoto'])->name('profile.photo.update');
     Route::delete('/mi-perfil/foto', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
     Route::get('/configuracion', [ProfileController::class, 'settings'])->name('profile.settings');
+
+    Route::middleware('role:'.User::ROLE_USER.','.User::ROLE_REVIEWER)->group(function () {
+        Route::get('/plazas', [PlazaController::class, 'index'])->name('plazas.index');
+        Route::get('/plazas/estado', [PlazaController::class, 'liveState'])->name('plazas.live-state');
+        Route::post('/plazas/mi-clave', [PlazaController::class, 'assignCurrent'])
+            ->name('plazas.assign-current');
+        Route::post('/plazas/mi-plaza/oferta-ascenso', [PlazaController::class, 'togglePromotionOffer'])
+            ->name('plazas.promotion-offer');
+        Route::post('/plazas/{plaza}/interes', [PlazaController::class, 'claimOffered'])
+            ->name('plazas.claim');
+    });
 
     Route::middleware('role:'.User::ROLE_USER)->group(function () {
         Route::get('/mis-postulaciones', [PostulacionController::class, 'index'])

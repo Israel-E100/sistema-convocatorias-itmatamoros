@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Dictaminador;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Convocatoria;
+use App\Models\Plaza;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -31,7 +33,9 @@ class ConvocatoriaController extends Controller
 
     public function create(): View
     {
-        return view('dictaminador.convocatorias.create');
+        return view('dictaminador.convocatorias.create', [
+            'plazasPorTiempo' => $this->plazasPorTiempo(),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -57,7 +61,10 @@ class ConvocatoriaController extends Controller
 
     public function edit(Convocatoria $convocatoria): View
     {
-        return view('dictaminador.convocatorias.edit', compact('convocatoria'));
+        return view('dictaminador.convocatorias.edit', [
+            'convocatoria' => $convocatoria,
+            'plazasPorTiempo' => $this->plazasPorTiempo(),
+        ]);
     }
 
     public function update(Request $request, Convocatoria $convocatoria): RedirectResponse
@@ -115,6 +122,11 @@ class ConvocatoriaController extends Controller
             'tipo_personal' => ['required', Rule::in(['Docente', 'No docente'])],
             'categoria_nivel' => ['required', 'string', 'max:150'],
             'plaza_disponible' => ['required', 'string', 'max:150'],
+            'plaza_id' => [
+                'nullable',
+                Rule::prohibitedIf($request->input('tipo_personal') !== 'Docente'),
+                Rule::exists('plazas', 'id'),
+            ],
             'jornada_horario' => ['required', 'string', 'max:150'],
             'salario' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'fecha_inicio' => ['required', 'date'],
@@ -122,6 +134,23 @@ class ConvocatoriaController extends Controller
             'estatus' => ['required', Rule::in(['Activa', 'Borrador', 'Cerrada'])],
             'requisitos_especificos' => ['nullable', 'string', 'max:10000'],
         ]);
+    }
+
+    /**
+     * @return Collection<int, Collection<int, Plaza>>
+     */
+    private function plazasPorTiempo(): Collection
+    {
+        $plazasPorCodigo = Plaza::query()
+            ->orderBy('orden')
+            ->get()
+            ->keyBy('codigo');
+
+        return collect(Plaza::CODES_BY_TIME)
+            ->map(fn (array $codes) => collect($codes)
+                ->map(fn (string $code) => $plazasPorCodigo->get($code))
+                ->filter()
+                ->values());
     }
 
     /**
@@ -135,6 +164,7 @@ class ConvocatoriaController extends Controller
             'tipo_personal',
             'categoria_nivel',
             'plaza_disponible',
+            'plaza_id',
             'jornada_horario',
             'salario',
             'fecha_inicio',

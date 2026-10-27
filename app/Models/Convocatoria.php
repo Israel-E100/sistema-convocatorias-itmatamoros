@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Convocatoria extends Model
@@ -13,6 +14,7 @@ class Convocatoria extends Model
         'tipo_personal',
         'categoria_nivel',
         'plaza_disponible',
+        'plaza_id',
         'jornada_horario',
         'salario',
         'fecha_inicio',
@@ -34,6 +36,11 @@ class Convocatoria extends Model
     public function postulaciones(): HasMany
     {
         return $this->hasMany(Postulacion::class);
+    }
+
+    public function plaza(): BelongsTo
+    {
+        return $this->belongsTo(Plaza::class);
     }
 
     public function isOpen(): bool

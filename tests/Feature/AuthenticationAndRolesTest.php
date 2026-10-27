@@ -21,6 +21,7 @@ class AuthenticationAndRolesTest extends TestCase
             'curp' => 'abcd001231hdfxxx01',
             'rfc' => 'abc001231xyz',
             'tipo_usuario' => 'aspirante_docente',
+            'plaza_codigo' => 'E3807',
             'email' => 'ANA@example.com',
             'password' => 'password-seguro',
             'password_confirmation' => 'password-seguro',
@@ -35,6 +36,7 @@ class AuthenticationAndRolesTest extends TestCase
         $this->assertSame('ABC001231XYZ', $user->rfc);
         $this->assertSame('aspirante_docente', $user->tipo_usuario);
         $this->assertSame(User::ROLE_USER, $user->role);
+        $this->assertDatabaseHas('plazas', ['codigo' => 'E3807', 'user_id' => $user->id]);
         $this->assertTrue(Hash::check('password-seguro', $user->password));
         $this->assertAuthenticatedAs($user);
         $this->assertDatabaseHas('audit_logs', [
@@ -67,6 +69,23 @@ class AuthenticationAndRolesTest extends TestCase
         ]);
 
         $this->assertDatabaseCount('users', 1);
+    }
+
+    public function test_registration_requires_a_current_position_for_teacher_profiles(): void
+    {
+        $this->from('/registro')->post('/registro', [
+            'nombre' => 'Ana',
+            'apellido_paterno' => 'López',
+            'apellido_materno' => 'Ruiz',
+            'curp' => 'abcd001231hdfxxx01',
+            'rfc' => 'abc001231xyz',
+            'tipo_usuario' => 'aspirante_docente',
+            'email' => 'ana@example.com',
+            'password' => 'password-seguro',
+            'password_confirmation' => 'password-seguro',
+        ])->assertRedirect('/registro')->assertSessionHasErrors('plaza_codigo');
+
+        $this->assertDatabaseMissing('users', ['email' => 'ana@example.com']);
     }
 
     public function test_successful_login_writes_a_timestamped_audit_entry(): void
@@ -146,6 +165,7 @@ class AuthenticationAndRolesTest extends TestCase
             'email' => 'carlos.perez@example.com',
             'role' => User::ROLE_USER,
             'tipo_usuario' => 'aspirante_docente',
+            'plaza_codigo' => 'E3807',
             'password' => '',
             'password_confirmation' => '',
         ])->assertRedirect(route('admin.users.index'));
@@ -220,6 +240,7 @@ class AuthenticationAndRolesTest extends TestCase
             'email' => $admin->email,
             'role' => User::ROLE_USER,
             'tipo_usuario' => 'aspirante_docente',
+            'plaza_codigo' => 'E3807',
             'password' => '',
             'password_confirmation' => '',
         ])->assertSessionHasErrors('role');

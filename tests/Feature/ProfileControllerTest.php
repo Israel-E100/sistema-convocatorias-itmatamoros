@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Plaza;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -53,6 +54,80 @@ class ProfileControllerTest extends TestCase
         $this->get(route('profile.show'))->assertRedirect(route('login'));
         $this->get(route('profile.settings'))->assertRedirect(route('login'));
         $this->get(route('profile.photo'))->assertRedirect(route('login'));
+    }
+
+    public function test_regular_user_can_choose_a_profile_plaza_only_once(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_USER,
+            'tipo_usuario' => 'aspirante_no_docente',
+        ]);
+        $occupant = User::factory()->create();
+        Plaza::query()->where('codigo', 'E3807')->update(['user_id' => $occupant->id]);
+
+        $this->actingAs($user)
+            ->get(route('profile.show'))
+            ->assertOk()
+            ->assertSee('name="plaza_codigo"', false)
+            ->assertSee('E3807')
+            ->assertSee('ocupada')
+            ->assertSee('disabled', false)
+            ->assertSee('E3809')
+            ->assertSee('disponible');
+
+        $this->put(route('profile.plaza.update'), ['plaza_codigo' => 'E3809'])
+            ->assertRedirect(route('profile.show'))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseHas('plazas', ['codigo' => 'E3809', 'user_id' => $user->id]);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'plaza_cambio_realizado' => true]);
+        $this->assertDatabaseHas('audit_logs', ['event' => 'plaza.assigned', 'user_id' => $user->id]);
+
+        $this->from(route('profile.show'))
+            ->put(route('profile.plaza.update'), ['plaza_codigo' => 'E3811'])
+            ->assertRedirect(route('profile.show'))
+            ->assertSessionHasErrors([
+                'plaza_codigo' => 'Ya elegiste tu plaza y no se puede volver a modificar.',
+            ]);
+
+        $this->assertDatabaseHas('plazas', ['codigo' => 'E3809', 'user_id' => $user->id]);
+        $this->assertDatabaseHas('plazas', ['codigo' => 'E3811', 'user_id' => null]);
+    }
+
+    public function test_user_with_a_preassigned_plaza_cannot_choose_another_one_from_profile(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_USER]);
+        Plaza::query()->where('codigo', 'E3807')->update(['user_id' => $user->id]);
+
+        $this->actingAs($user)
+            ->get(route('profile.show'))
+            ->assertOk()
+            ->assertSee('Clave actual:')
+            ->assertSee('E3807')
+            ->assertSee('Tu plaza ya fue elegida y no puede modificarse.')
+            ->assertDontSee('name="plaza_codigo"', false);
+
+        $this->put(route('profile.plaza.update'), ['plaza_codigo' => 'E3809'])
+            ->assertRedirect(route('profile.show'))
+            ->assertSessionHasErrors('plaza_codigo');
+
+        $this->assertDatabaseHas('plazas', ['codigo' => 'E3807', 'user_id' => $user->id]);
+        $this->assertDatabaseHas('plazas', ['codigo' => 'E3809', 'user_id' => null]);
+    }
+
+    public function test_reviewer_cannot_choose_a_profile_plaza(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_REVIEWER,
+        ]);
+
+        $this->actingAs($user)
+            ->from(route('profile.show'))
+            ->put(route('profile.plaza.update'), ['plaza_codigo' => 'E3817'])
+            ->assertRedirect(route('profile.show'))
+            ->assertSessionHasErrors('plaza_codigo');
+
+        $this->assertDatabaseHas('plazas', ['codigo' => 'E3817', 'user_id' => null]);
     }
 
     #[DataProvider('userRoles')]

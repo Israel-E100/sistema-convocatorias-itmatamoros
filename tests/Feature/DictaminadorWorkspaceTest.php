@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Convocatoria;
+use App\Models\Plaza;
 use App\Models\Postulacion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,15 +18,20 @@ class DictaminadorWorkspaceTest extends TestCase
     public function test_reviewer_can_create_update_and_delete_convocatorias_without_applicants(): void
     {
         $reviewer = User::factory()->create(['role' => User::ROLE_REVIEWER]);
+        $plaza = Plaza::query()->where('codigo', 'E3817')->firstOrFail();
         $this->actingAs($reviewer);
 
-        $this->post(route('dictaminador.convocatorias.store'), $this->convocatoriaData())
+        $this->post(route('dictaminador.convocatorias.store'), [
+            ...$this->convocatoriaData(),
+            'plaza_id' => $plaza->id,
+        ])
             ->assertRedirect(route('dictaminador.convocatorias.index'));
 
         $convocatoria = Convocatoria::query()->firstOrFail();
         $this->assertSame($reviewer->id, $convocatoria->created_by);
         $this->assertSame('Abierta', $convocatoria->tipo_concurso);
         $this->assertSame('Docente', $convocatoria->tipo_personal);
+        $this->assertSame($plaza->id, $convocatoria->plaza_id);
         $this->assertDatabaseHas('audit_logs', [
             'event' => 'convocatoria.created',
             'actor_id' => $reviewer->id,
@@ -53,6 +59,7 @@ class DictaminadorWorkspaceTest extends TestCase
     public function test_convocatoria_form_and_validation_use_fixed_personnel_and_contest_options(): void
     {
         $reviewer = User::factory()->create(['role' => User::ROLE_REVIEWER]);
+        $plaza = Plaza::query()->where('codigo', 'E3817')->firstOrFail();
 
         $this->actingAs($reviewer)
             ->get(route('dictaminador.convocatorias.create'))
@@ -62,7 +69,8 @@ class DictaminadorWorkspaceTest extends TestCase
             ->assertSee('<option value="No docente"', false)
             ->assertSee('<select id="tipo_concurso"', false)
             ->assertSee('<option value="Abierta"', false)
-            ->assertSee('<option value="Cerrada"', false);
+            ->assertSee('<option value="Cerrada"', false)
+            ->assertSee('<option value="'.$plaza->id.'"', false);
 
         $this->actingAs($reviewer)
             ->post(route('dictaminador.convocatorias.store'), [
@@ -84,6 +92,22 @@ class DictaminadorWorkspaceTest extends TestCase
                 'tipo_concurso' => 'Público Abierto',
             ])
             ->assertSessionHasErrors('tipo_concurso');
+
+        $this->assertDatabaseCount('convocatorias', 0);
+    }
+
+    public function test_non_teaching_convocatoria_cannot_be_linked_to_a_plaza(): void
+    {
+        $reviewer = User::factory()->create(['role' => User::ROLE_REVIEWER]);
+        $plaza = Plaza::query()->where('codigo', 'E3817')->firstOrFail();
+
+        $this->actingAs($reviewer)
+            ->post(route('dictaminador.convocatorias.store'), [
+                ...$this->convocatoriaData(),
+                'tipo_personal' => 'No docente',
+                'plaza_id' => $plaza->id,
+            ])
+            ->assertSessionHasErrors('plaza_id');
 
         $this->assertDatabaseCount('convocatorias', 0);
     }

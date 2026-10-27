@@ -61,10 +61,32 @@
 
                 <div>
                     <label for="tipo_usuario" class="block text-xs font-semibold text-gray-700 uppercase mb-1">Tipo de Perfil</label>
-                    <select id="tipo_usuario" name="tipo_usuario" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-900 focus:outline-none">
-                        <option value="aspirante_docente">Aspirante a Plaza Docente</option>
-                        <option value="aspirante_no_docente">Aspirante a Plaza No Docente / Administrativa</option>
+                    <select id="tipo_usuario" name="tipo_usuario" required data-profile-type
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-900 focus:outline-none">
+                        <option value="aspirante_docente" @selected(old('tipo_usuario', 'aspirante_docente') === 'aspirante_docente')>Docente con plaza actual</option>
+                        <option value="aspirante_no_docente" @selected(old('tipo_usuario') === 'aspirante_no_docente')>Aspirante a Plaza No Docente / Administrativa</option>
                     </select>
+                </div>
+
+                <div data-plaza-code-field>
+                    <label for="plaza_codigo" class="block text-xs font-semibold text-gray-700 uppercase mb-1">Clave de puesto actual</label>
+                    <select id="plaza_codigo" name="plaza_codigo" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-900 focus:outline-none">
+                        <option value="">Selecciona tu clave</option>
+                        @foreach ($codigosDisponibles as $tipoTiempo => $plazasTiempo)
+                            <optgroup label="{{ $tipoTiempo }}">
+                                @foreach ($plazasTiempo as $plaza)
+                                    <option value="{{ $plaza->codigo }}" @selected(old('plaza_codigo') === $plaza->codigo)>
+                                        {{ $plaza->codigo }}
+                                    </option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">La clave debe corresponder a tu plaza actual.</p>
+                    @error('plaza_codigo')
+                        <p class="mt-1 text-xs text-red-700">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 <div>

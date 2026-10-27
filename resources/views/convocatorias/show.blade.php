@@ -6,6 +6,12 @@
     <section class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <a href="{{ route('home') }}#convocatorias" class="text-sm font-semibold text-rose-900 hover:underline">&larr; Convocatorias</a>
 
+        @if (session('status'))
+            <p role="status" class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {{ session('status') }}
+            </p>
+        @endif
+
         <article class="mt-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
             <div class="flex flex-wrap gap-2">
                 <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-900">{{ $convocatoria->tipo_personal }}</span>
@@ -17,6 +23,9 @@
             <dl class="mt-6 grid grid-cols-1 gap-4 rounded-lg bg-rose-50 p-4 sm:grid-cols-2">
                 <div><dt class="text-xs font-semibold text-gray-500">Categoría / nivel</dt><dd class="mt-1 text-sm font-medium text-gray-900">{{ $convocatoria->categoria_nivel }}</dd></div>
                 <div><dt class="text-xs font-semibold text-gray-500">Plazas disponibles</dt><dd class="mt-1 text-sm font-medium text-gray-900">{{ $convocatoria->plaza_disponible }}</dd></div>
+                @if ($convocatoria->plaza)
+                    <div><dt class="text-xs font-semibold text-gray-500">Código de plaza</dt><dd class="mt-1 text-sm font-medium text-gray-900">{{ $convocatoria->plaza->codigo }}</dd></div>
+                @endif
                 <div><dt class="text-xs font-semibold text-gray-500">Jornada / horario</dt><dd class="mt-1 text-sm font-medium text-gray-900">{{ $convocatoria->jornada_horario }}</dd></div>
                 <div><dt class="text-xs font-semibold text-gray-500">Remuneración</dt><dd class="mt-1 text-sm font-medium text-emerald-800">{{ $convocatoria->salario ? '$'.number_format((float) $convocatoria->salario, 2).' MXN' : 'No especificada' }}</dd></div>
                 <div><dt class="text-xs font-semibold text-gray-500">Apertura</dt><dd class="mt-1 text-sm font-medium text-gray-900">{{ $convocatoria->fecha_inicio->format('d/m/Y') }}</dd></div>
@@ -31,6 +40,10 @@
             <div class="mt-8 border-t border-gray-100 pt-6">
                 @if (! $convocatoria->isOpen())
                     <p class="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Esta convocatoria no está recibiendo postulaciones actualmente.</p>
+                @elseif ($plazaReservadaPorOtraPersona)
+                    <p class="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
+                        Otra persona ya reservó su interés en la plaza asociada a esta convocatoria.
+                    </p>
                 @elseif ($postulacionExistente)
                     <p class="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800">
                         Ya enviaste una postulación a esta convocatoria.

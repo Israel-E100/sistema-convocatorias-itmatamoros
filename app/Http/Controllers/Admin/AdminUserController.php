@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\Plaza;
 use App\Models\User;
+use App\Services\PlazaAssignmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -31,19 +34,27 @@ class AdminUserController extends Controller
         return view('admin.users.create', [
             'roles' => User::MANAGED_ROLES,
             'applicantTypes' => User::APPLICANT_TYPES,
+            'codigosDisponibles' => $this->availablePlazas(),
+            'plazaActual' => null,
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, PlazaAssignmentService $plazaService): RedirectResponse
     {
         $data = $this->validatedData($request);
+        $plazaCode = $data['plaza_codigo'] ?? null;
+        unset($data['plaza_codigo']);
         $actor = $request->user();
 
-        $user = DB::transaction(function () use ($data, $actor): User {
+        $user = DB::transaction(function () use ($data, $actor, $plazaCode, $plazaService): User {
             $user = User::create([
                 ...$data,
                 'name' => $this->fullName($data),
             ]);
+
+            if ($plazaCode !== null) {
+                $plazaService->assignCurrentPlaza($user, $plazaCode, $actor);
+            }
 
             AuditLog::record('user.created', $actor, $user, [
                 'source' => 'admin',
@@ -61,6 +72,7 @@ class AdminUserController extends Controller
     public function edit(User $user): View
     {
         abort_unless(in_array($user->role, User::ROLES, true), 404);
+        $plazaActual = $user->plaza;
 
         return view('admin.users.edit', [
             'user' => $user,
@@ -68,12 +80,19 @@ class AdminUserController extends Controller
                 ? User::ROLES
                 : User::MANAGED_ROLES,
             'applicantTypes' => User::APPLICANT_TYPES,
+            'codigosDisponibles' => $this->availablePlazas($user),
+            'plazaActual' => $plazaActual,
         ]);
     }
 
-    public function update(Request $request, User $user): RedirectResponse
-    {
+    public function update(
+        Request $request,
+        User $user,
+        PlazaAssignmentService $plazaService,
+    ): RedirectResponse {
         $data = $this->validatedData($request, $user);
+        $plazaCode = $data['plaza_codigo'] ?? null;
+        unset($data['plaza_codigo']);
         $actor = $request->user();
         $updatedName = $this->fullName($data);
 
@@ -88,7 +107,7 @@ class AdminUserController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($data, $user, $actor): void {
+        DB::transaction(function () use ($data, $user, $actor, $plazaCode, $plazaService): void {
             $user = User::query()->lockForUpdate()->findOrFail($user->id);
 
             if ($user->role === User::ROLE_ADMIN
@@ -110,6 +129,10 @@ class AdminUserController extends Controller
             }
 
             $user->save();
+
+            if ($plazaCode !== null) {
+                $plazaService->assignCurrentPlaza($user, $plazaCode, $actor);
+            }
 
             $after = $this->auditableAttributes($user);
             AuditLog::record('user.updated', $actor, $user, [
@@ -156,7 +179,11 @@ class AdminUserController extends Controller
             'rfc' => filled($request->input('rfc')) ? Str::upper((string) $request->input('rfc')) : null,
         ]);
 
-        return $request->validate([
+        $hasCurrentPlaza = $user?->plaza()->exists() ?? false;
+        $requiresPlaza = $request->input('role') === User::ROLE_USER
+            && $request->input('tipo_usuario') === 'aspirante_docente'
+            && ! $hasCurrentPlaza;
+        $data = $request->validate([
             'nombre' => ['required', 'string', 'max:100'],
             'apellido_paterno' => ['nullable', 'string', 'max:100'],
             'apellido_materno' => ['nullable', 'string', 'max:100'],
@@ -166,6 +193,11 @@ class AdminUserController extends Controller
                 Rule::requiredIf($request->input('role') === User::ROLE_USER),
                 'nullable',
                 Rule::in(User::APPLICANT_TYPES),
+            ],
+            'plaza_codigo' => [
+                Rule::requiredIf($requiresPlaza),
+                Rule::prohibitedIf(! $requiresPlaza),
+                Rule::in(collect(Plaza::CODES_BY_TIME)->flatten()->all()),
             ],
             'email' => [
                 'required',
@@ -179,6 +211,39 @@ class AdminUserController extends Controller
             ],
             'password' => [$user ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
         ]);
+
+        if ($hasCurrentPlaza && (
+            $data['role'] !== User::ROLE_USER
+            || ($data['tipo_usuario'] ?? null) !== 'aspirante_docente'
+        )) {
+            throw ValidationException::withMessages([
+                'tipo_usuario' => 'No puedes cambiar el perfil o rol mientras la cuenta tenga una plaza asignada.',
+            ]);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return Collection<string, Collection<int, Plaza>>
+     */
+    private function availablePlazas(?User $user = null): Collection
+    {
+        $plazasDisponibles = Plaza::query()
+            ->where(function ($query) use ($user): void {
+                $query->whereNull('user_id');
+                if ($user) {
+                    $query->orWhere('user_id', $user->id);
+                }
+            })
+            ->get()
+            ->keyBy('codigo');
+
+        return collect(Plaza::CODES_BY_TIME)
+            ->map(fn (array $codes): Collection => collect($codes)
+                ->map(fn (string $code): ?Plaza => $plazasDisponibles->get($code))
+                ->filter()
+                ->values());
     }
 
     /**
@@ -198,16 +263,19 @@ class AdminUserController extends Controller
      */
     private function auditableAttributes(User $user): array
     {
-        return $user->only([
-            'name',
-            'email',
-            'nombre',
-            'apellido_paterno',
-            'apellido_materno',
-            'curp',
-            'rfc',
-            'tipo_usuario',
-            'role',
-        ]);
+        return [
+            ...$user->only([
+                'name',
+                'email',
+                'nombre',
+                'apellido_paterno',
+                'apellido_materno',
+                'curp',
+                'rfc',
+                'tipo_usuario',
+                'role',
+            ]),
+            'plaza_codigo' => $user->plaza?->codigo,
+        ];
     }
 }

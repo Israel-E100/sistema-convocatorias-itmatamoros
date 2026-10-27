@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Plaza;
+use App\Models\User;
+use App\Services\PlazaAssignmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -15,7 +19,34 @@ class ProfileController extends Controller
 {
     public function show(Request $request): View
     {
-        return view('profile.show', ['user' => $request->user()]);
+        $user = $request->user()->load('plaza');
+        $plazasDisponibles = Plaza::query()
+            ->with('ocupante:id,name')
+            ->orderBy('tipo_tiempo')
+            ->orderBy('orden')
+            ->get()
+            ->groupBy('tipo_tiempo');
+
+        return view('profile.show', [
+            'user' => $user,
+            'plazasDisponibles' => $plazasDisponibles,
+            'puedeElegirPlaza' => $user->role === User::ROLE_USER,
+        ]);
+    }
+
+    public function updateCurrentPlaza(Request $request, PlazaAssignmentService $service): RedirectResponse
+    {
+        $data = $request->validate([
+            'plaza_codigo' => [
+                'required',
+                Rule::in(collect(Plaza::CODES_BY_TIME)->flatten()->all()),
+            ],
+        ]);
+
+        $service->changeCurrentPlaza($request->user(), $data['plaza_codigo']);
+
+        return redirect()->route('profile.show')
+            ->with('status', 'La plaza de tu perfil se actualizó correctamente.');
     }
 
     public function settings(): View

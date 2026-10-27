@@ -51,6 +51,24 @@
             </div>
         @endforeach
         <div>
+            <label for="plaza_id" class="mb-1 block text-sm font-semibold text-gray-700">Código de plaza asociado (opcional)</label>
+            <select id="plaza_id" name="plaza_id"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-900">
+                <option value="">Sin plaza específica</option>
+                @foreach ($plazasPorTiempo as $tipoTiempo => $plazas)
+                    <optgroup label="{{ $tipoTiempo }}">
+                        @foreach ($plazas as $plaza)
+                            <option value="{{ $plaza->id }}"
+                                @selected((string) old('plaza_id', $convocatoria->plaza_id ?? '') === (string) $plaza->id)>
+                                {{ $plaza->codigo }}
+                            </option>
+                        @endforeach
+                    </optgroup>
+                @endforeach
+            </select>
+            <p class="mt-1 text-xs text-gray-500">Una plaza asociada permite abrir esta convocatoria desde el tablero.</p>
+        </div>
+        <div>
             <label for="salario" class="mb-1 block text-sm font-semibold text-gray-700">Remuneración mensual (MXN)</label>
             <input id="salario" type="number" name="salario" value="{{ old('salario', $convocatoria->salario ?? '') }}" min="0" step="0.01"
                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-900">

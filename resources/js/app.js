@@ -100,6 +100,187 @@ if (notificationsMenu) {
     }
 }
 
+const profileTypeSelect = document.querySelector('[data-profile-type]');
+const plazaCodeField = document.querySelector('[data-plaza-code-field]');
+const plazaCodeSelect = plazaCodeField?.querySelector('select');
+
+if (profileTypeSelect && plazaCodeField && plazaCodeSelect) {
+    const updatePlazaCodeRequirement = () => {
+        const isTeacher = profileTypeSelect.value === 'aspirante_docente';
+        plazaCodeField.classList.toggle('hidden', !isTeacher);
+        plazaCodeSelect.required = isTeacher;
+        plazaCodeSelect.disabled = !isTeacher;
+    };
+
+    profileTypeSelect.addEventListener('change', updatePlazaCodeRequirement);
+    updatePlazaCodeRequirement();
+}
+
+const adminRoleSelect = document.querySelector('[data-admin-role]');
+const adminProfileTypeSelect = document.querySelector('[data-admin-profile-type]');
+const adminPlazaField = document.querySelector('[data-admin-plaza-field]');
+const adminPlazaSelect = adminPlazaField?.querySelector('[data-admin-plaza-select]');
+
+if (adminRoleSelect && adminProfileTypeSelect && adminPlazaField && adminPlazaSelect) {
+    const updateAdminPlazaRequirement = () => {
+        const requiresPlaza = adminRoleSelect.value === 'usuario'
+            && adminProfileTypeSelect.value === 'aspirante_docente';
+        adminPlazaField.classList.toggle('hidden', !requiresPlaza);
+        adminPlazaSelect.required = requiresPlaza;
+        adminPlazaSelect.disabled = !requiresPlaza;
+    };
+
+    adminRoleSelect.addEventListener('change', updateAdminPlazaRequirement);
+    adminProfileTypeSelect.addEventListener('change', updateAdminPlazaRequirement);
+    updateAdminPlazaRequirement();
+}
+
+const plazasBoard = document.querySelector('[data-plazas-board]');
+
+if (plazasBoard) {
+    const stateClasses = {
+        ocupada: ['border-gray-300', 'bg-gray-100', 'text-gray-800'],
+        disponible: ['border-emerald-300', 'bg-emerald-50', 'text-emerald-950'],
+        ascenso_pendiente: ['border-blue-300', 'bg-blue-50', 'text-blue-950'],
+        reservada: ['border-amber-300', 'bg-amber-50', 'text-amber-950'],
+    };
+    const allStateClasses = Object.values(stateClasses).flat();
+    const updatedLabel = plazasBoard.querySelector('[data-plazas-updated]');
+    const notice = plazasBoard.querySelector('[data-plaza-notice]');
+    const canInteract = plazasBoard.dataset.canInteract === 'true';
+    const closeNotice = () => {
+        notice.classList.add('hidden');
+        notice.classList.remove('flex');
+        notice.setAttribute('aria-hidden', 'true');
+    };
+
+    const openNotice = () => {
+        notice.classList.remove('hidden');
+        notice.classList.add('flex');
+        notice.setAttribute('aria-hidden', 'false');
+        notice.querySelector('[data-plaza-notice-close]')?.focus();
+    };
+
+    notice?.querySelectorAll('[data-plaza-notice-close]').forEach((button) => {
+        button.addEventListener('click', closeNotice);
+    });
+
+    notice?.addEventListener('click', (event) => {
+        if (event.target === notice) {
+            closeNotice();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && notice && !notice.classList.contains('hidden')) {
+            closeNotice();
+        }
+    });
+
+    plazasBoard.addEventListener('click', (event) => {
+        const action = event.target.closest('[data-plaza-action]');
+
+        if (!action || action.disabled) {
+            return;
+        }
+
+        const card = action.closest('[data-plaza-state]');
+
+        if (card.dataset.estado === 'disponible') {
+            if (card.dataset.convocatoriaUrl) {
+                window.location.assign(card.dataset.convocatoriaUrl);
+            } else {
+                openNotice();
+            }
+        } else if (card.dataset.estado === 'ascenso_pendiente') {
+            card.querySelector('[data-plaza-claim-form]')?.requestSubmit();
+        }
+    });
+
+    const refreshPlazas = async () => {
+        try {
+            const response = await fetch(plazasBoard.dataset.liveStateUrl, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+                cache: 'no-store',
+            });
+
+            if (!response.ok) {
+                throw new Error(`La actualización del estado de plazas respondió ${response.status}.`);
+            }
+
+            const { plazas, actualizado: updatedAt } = await response.json();
+
+            plazas.forEach((plaza) => {
+                const card = plazasBoard.querySelector(`[data-plaza-state][data-codigo="${plaza.codigo}"]`);
+
+                if (!card || !stateClasses[plaza.estado]) {
+                    return;
+                }
+
+                const isMyPlaza = plaza.es_mi_plaza === true;
+                card.classList.remove(...allStateClasses);
+                card.classList.add(...stateClasses[plaza.estado]);
+                card.dataset.estado = plaza.estado;
+                card.dataset.convocatoriaUrl = plaza.convocatoria_url ?? '';
+                card.dataset.isMyPlaza = String(isMyPlaza);
+
+                const action = card.querySelector('[data-plaza-action]');
+                const label = card.querySelector('[data-plaza-label]');
+                const occupant = card.querySelector('[data-plaza-occupant]');
+                const offerForm = card.querySelector('[data-plaza-offer-form]');
+                const offerButton = card.querySelector('[data-plaza-offer-button]');
+                const claimForm = card.querySelector('[data-plaza-claim-form]');
+                const myBadge = card.querySelector('[data-plaza-my-badge]');
+
+                if (action) {
+                    action.disabled = !canInteract
+                        || plaza.estado === 'ocupada'
+                        || plaza.estado === 'reservada'
+                        || (plaza.estado === 'ascenso_pendiente' && isMyPlaza);
+                }
+                if (label) {
+                    label.textContent = plaza.etiqueta;
+                }
+                if (occupant) {
+                    occupant.textContent = plaza.ocupante ? `Titular: ${plaza.ocupante}` : '';
+                }
+                if (offerForm) {
+                    offerForm.hidden = !isMyPlaza;
+                }
+                if (myBadge) {
+                    myBadge.hidden = !isMyPlaza;
+                }
+                if (offerButton) {
+                    offerButton.disabled = plaza.estado === 'reservada';
+                    offerButton.textContent = plaza.estado === 'ascenso_pendiente'
+                        ? 'Retirar oferta'
+                        : plaza.estado === 'reservada'
+                            ? 'Interés reservado'
+                            : 'Ofrecer para ascenso';
+                }
+                if (claimForm) {
+                    claimForm.hidden = !canInteract
+                        || isMyPlaza
+                        || plaza.estado !== 'ascenso_pendiente';
+                }
+            });
+
+            if (updatedLabel) {
+                updatedLabel.textContent = `Estado actualizado: ${new Date(updatedAt).toLocaleTimeString('es-MX')}`;
+            }
+        } catch (error) {
+            console.error('No fue posible actualizar el tablero de plazas.', error);
+            if (updatedLabel) {
+                updatedLabel.textContent = 'No se pudo actualizar el estado. Se intentará nuevamente.';
+            }
+        }
+    };
+
+    refreshPlazas();
+    window.setInterval(refreshPlazas, 15000);
+}
+
 const themeToggle = document.querySelector('[data-theme-toggle]');
 
 if (themeToggle) {

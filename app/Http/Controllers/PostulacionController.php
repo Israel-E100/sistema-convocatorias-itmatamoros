@@ -7,6 +7,7 @@ use App\Models\Convocatoria;
 use App\Models\Postulacion;
 use App\Models\User;
 use App\Notifications\NuevaPostulacion;
+use App\Services\PlazaAssignmentService;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -39,8 +40,11 @@ class PostulacionController extends Controller
         ]);
     }
 
-    public function store(Request $request, Convocatoria $convocatoria): RedirectResponse
-    {
+    public function store(
+        Request $request,
+        Convocatoria $convocatoria,
+        PlazaAssignmentService $plazaService,
+    ): RedirectResponse {
         abort_unless($request->user()->role === User::ROLE_USER, 403);
 
         if (! $convocatoria->isOpen()) {
@@ -57,7 +61,13 @@ class PostulacionController extends Controller
         $path = null;
 
         try {
-            $postulacion = DB::transaction(function () use ($request, $convocatoria, $data, &$path): Postulacion {
+            $postulacion = DB::transaction(function () use (
+                $request,
+                $convocatoria,
+                $data,
+                $plazaService,
+                &$path,
+            ): Postulacion {
                 $convocatoria = Convocatoria::query()
                     ->lockForUpdate()
                     ->findOrFail($convocatoria->id);
@@ -67,6 +77,8 @@ class PostulacionController extends Controller
                         'convocatoria' => 'Esta convocatoria ya no está recibiendo postulaciones.',
                     ]);
                 }
+
+                $plazaService->reserveForConvocatoriaApplication($request->user(), $convocatoria);
 
                 $path = $request->file('documento')?->store('postulaciones', 'local');
 

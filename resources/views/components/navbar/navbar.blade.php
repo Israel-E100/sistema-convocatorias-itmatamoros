@@ -21,11 +21,15 @@
                         <a href="{{ route('admin.audit-logs.index') }}"
                             class="rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Historial</a>
                     @elseif (auth()->user()->role === \App\Models\User::ROLE_REVIEWER)
+                        <a href="{{ route('plazas.index') }}"
+                            class="rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Plazas</a>
                         <a href="{{ route('dictaminador.convocatorias.index') }}"
                             class="rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Convocatorias</a>
                         <a href="{{ route('dictaminador.postulantes.index') }}"
                             class="rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Postulantes</a>
                     @else
+                        <a href="{{ route('plazas.index') }}"
+                            class="rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Plazas</a>
                         <a href="{{ route('home') }}#convocatorias"
                             data-applicant-convocatorias-link
                             class="rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Convocatorias</a>
@@ -216,11 +220,15 @@
                 <a href="{{ route('admin.audit-logs.index') }}"
                     class="block rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Historial</a>
             @elseif (auth()->user()->role === \App\Models\User::ROLE_REVIEWER)
+                <a href="{{ route('plazas.index') }}"
+                    class="block rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Plazas</a>
                 <a href="{{ route('dictaminador.convocatorias.index') }}"
                     class="block rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Convocatorias</a>
                 <a href="{{ route('dictaminador.postulantes.index') }}"
                     class="block rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Postulantes</a>
             @else
+                <a href="{{ route('plazas.index') }}"
+                    class="block rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Plazas</a>
                 <a href="{{ route('home') }}#convocatorias"
                     data-applicant-convocatorias-link
                     class="block rounded-lg px-3 py-2 text-sm transition hover:bg-slate-800">Convocatorias</a>
